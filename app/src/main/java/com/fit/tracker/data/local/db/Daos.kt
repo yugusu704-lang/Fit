@@ -21,8 +21,11 @@ interface FoodDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFood(food: FoodEntity)
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFoods(foods: List<FoodEntity>)
+
+    @Query("DELETE FROM foods WHERE id IN ('food_chicken_breast', 'food_beef_steak', 'food_salmon', 'food_beef_lean')")
+    suspend fun purgeObsoleteFoods()
 }
 
 @Dao
@@ -59,6 +62,23 @@ interface ExerciseAllocationDao {
 
     @Query("DELETE FROM exercise_allocations WHERE date = :date")
     suspend fun deleteAllocationsByDate(date: String)
+
+    @Query("DELETE FROM exercise_allocations WHERE date = :date AND exerciseId = :exerciseId")
+    suspend fun deleteAllocation(date: String, exerciseId: String)
+
+    @Query("SELECT * FROM exercise_allocations WHERE date = :date AND exerciseId = :exerciseId LIMIT 1")
+    suspend fun getAllocation(date: String, exerciseId: String): ExerciseAllocationEntity?
+
+    @Query("UPDATE exercise_allocations SET isCompleted = :isCompleted WHERE date = :date AND exerciseId = :exerciseId")
+    suspend fun updateCompletion(date: String, exerciseId: String, isCompleted: Boolean)
+
+    @androidx.room.Transaction
+    suspend fun replaceAllocationsForDate(date: String, allocations: List<ExerciseAllocationEntity>) {
+        deleteAllocationsByDate(date)
+        if (allocations.isNotEmpty()) {
+            insertAllocations(allocations)
+        }
+    }
 }
 
 @Dao

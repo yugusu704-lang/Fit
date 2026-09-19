@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fit</string>
+    <string name="widget_4x2_name">Fit 今日减脂 (4×2)</string>
+    <string name="widget_4x3_name">Fit 今日减脂 (4×3)</string>
+    <string name="widget_description">在桌面查看今日卡路里收支与运动打卡</string>
+</resources>

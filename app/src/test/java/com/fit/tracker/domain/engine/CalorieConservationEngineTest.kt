@@ -133,4 +133,22 @@ class CalorieConservationEngineTest {
         val total = rebalanced.sumOf { it.calories }
         assertTrue("Total must remain conserved", abs(total - targetKcal) <= 1)
     }
+
+    @Test
+    fun rebalanceForNewTarget_preservesCompleted_andConservesNewTarget() {
+        val initial = engine.allocateInitial(listOf(jumpRope, running, squats), 300)
+        val withCompleted = initial.map {
+            if (it.exercise.id == jumpRope.id) it.copy(isCompleted = true) else it
+        }
+        val completedKcal = withCompleted.first { it.exercise.id == jumpRope.id }.calories
+
+        val rebalanced = engine.rebalanceForNewTarget(withCompleted, 500)
+
+        val finalJumpRope = rebalanced.first { it.exercise.id == jumpRope.id }
+        assertEquals(completedKcal, finalJumpRope.calories)
+        assertTrue(finalJumpRope.isCompleted)
+
+        val total = rebalanced.sumOf { it.calories }
+        assertTrue("Total must be within 1 kcal of 500, got $total", abs(total - 500) <= 1)
+    }
 }

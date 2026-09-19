@@ -19,32 +19,30 @@
   - 内置跳绳、跑步（400m操场跑道）、游泳、骑行、深蹲等运动，自动按等热量权重均分并规整为离散生活化单位；
   - **热量绝对守恒**：微调某一运动量时，系统根据架构护轨实时联动其余未锁定运动反向对冲，确保总运动消耗严格守恒；
   - 提供单项锁定（Pin）功能与量子残差吸收端（Slack Absorber），消除取整抖动。
-- **📋 底部可抽拉任务舱 (Anchored Bottom Sheet)**
-  - 确认计划后生成底部常驻卡片，展示今日摄入 vs 目标消耗与液体感完成进度；
-  - 向上拖拽平滑展开当日任务清单，子卡片左侧配备自定义触感微振动圆环（`CLOCK_TICK` 反馈），点击平滑划线打卡。
-- **🎨 Impeccable 设计系统**
-  - 暖骨白/深炭灰中性色调，单个低饱和赤陶焦橙（`#D9532F`）强调色；
-  - 全局数据指标采用 **Tabular Monospace（等宽数字）**，动态滑动调节数值时**界面毫秒级零抖动**。
+- **🎨 Material 3 Expressive 设计系统 (严格遵循 UI.txt 规范)**
+  - 专属自然绿意配色（浅色主色 `#2E6A3D`，深色主色 `#96D5A1`），完全跟随 Android 系统深浅色模式切换；
+  - 标准 Expressive 弹性动效（`MotionScheme.expressive()`）与圆角规范（胶囊按钮、188dp/14dp 饮食摄入卡片、20dp 推荐运动卡片、28dp 对话框、16dp FAB）；
+  - 顶部 64dp “FIT” 应用栏配备 `verified` 本地认证档案与 `calendar_month` 日历历史回溯；
+  - 动态波浪（Wavy）线性进度条与运动复选打卡联动；单行非折叠 FAB 组合布局（`edit` 方案调整与向右拉伸的 `exercise` 快速开始）。
 
 ---
 
 ## 🛠 技术架构
 
 - **语言**: Kotlin 2.0.21
-- **UI 框架**: Jetpack Compose + Material 3 + Impeccable Design Token
-- **本地存储**: Android Jetpack Room 2.6.1 (SQLite)
-- **架构模式**: MVI / Clean Architecture (Domain, Data, UI 严格分层)
-- **测试体系**: TDD 先行，100% 覆盖核心代谢与守恒重平衡用例
+- **UI 框架**: Jetpack Compose + Material 3 (Expressive Tokens)
+- **本地存储**: Android Jetpack Room 2.6.1 (SQLite 纯本地持久化)
+- **架构模式**: MVI / Clean Architecture (Unidirectional Data Flow via `flatMapLatest`)
+- **测试体系**: 严格 DevFlow TDD 规范，单元测试全绿覆盖核心计算与状态转换
+- **交付产物**: 已签名 Release APK (`app-release.apk`)
 
 ---
 
 ## 📥 下载安装
 
-前往 [GitHub Releases](https://github.com/yugusu704-lang/Fit/releases) 下载最新版的 `app-debug.apk`，安装至安卓手机即可使用。
-
-或者通过 ADB 快速安装：
+安装最新构建的已签名 Release APK 至安卓手机即可使用：
 ```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
 ---
@@ -54,11 +52,11 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 要求环境：JDK 17/21，Android SDK 35。
 
 ```bash
-# 运行单元测试
+# 运行全部单元测试
 ./gradlew testDebugUnitTest
 
-# 打包 Debug APK
-./gradlew assembleDebug
+# 构建已签名 Release APK
+./gradlew assembleRelease
 ```
 
 ---

@@ -30,6 +30,7 @@ data class FoodItem(
     val protein: Double = 0.0,
     val carbs: Double = 0.0,
     val fat: Double = 0.0,
+    val category: String = "主食谷物",
     val isCustom: Boolean = false,
     val isArchived: Boolean = false
 )
@@ -48,7 +49,8 @@ enum class ExerciseUnitType(val label: String) {
     REPS("个"),
     LAPS("圈(400m)"),
     METERS("米"),
-    KILOMETERS("公里")
+    KILOMETERS("公里"),
+    MINUTES("分钟")
 }
 
 data class ExerciseDefinition(
@@ -59,6 +61,7 @@ data class ExerciseDefinition(
     val kcalPerUnit: Double,
     val stepQuantum: Int,
     val minUnits: Int = 0,
+    val category: String = "经典有氧",
     val isArchived: Boolean = false
 )
 
@@ -89,6 +92,11 @@ data class DailyTrackerState(
         get() = if (targetBurnKcal > 0) {
             (completedBurnKcal.toFloat() / targetBurnKcal.toFloat()).coerceIn(0f, 1f)
         } else {
-            1f
+            val total = activeExercises.size
+            if (total > 0) {
+                (activeExercises.count { it.isCompleted }.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
         }
 }

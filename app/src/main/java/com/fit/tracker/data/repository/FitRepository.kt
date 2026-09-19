@@ -1,5 +1,6 @@
 package com.fit.tracker.data.repository
 
+import android.content.Context
 import com.fit.tracker.data.local.db.DailyPlanEntity
 import com.fit.tracker.data.local.db.ExerciseAllocationEntity
 import com.fit.tracker.data.local.db.FitDatabase
@@ -13,12 +14,32 @@ import com.fit.tracker.domain.model.FoodItem
 import com.fit.tracker.domain.model.FoodLogEntry
 import com.fit.tracker.domain.model.Gender
 import com.fit.tracker.domain.model.UserProfile
+import com.fit.tracker.widget.FitWidgetProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
-class FitRepository(private val db: FitDatabase) {
+interface IFitRepository {
+    fun searchFoods(query: String): Flow<List<FoodItem>>
+    suspend fun addCustomFood(food: FoodItem)
+    suspend fun addQuickFoodRecord(date: String, name: String, calories: Int, carbs: Double = 0.0, protein: Double = 0.0, fat: Double = 0.0): FoodItem
+    fun getFoodRecords(date: String): Flow<List<FoodLogEntry>>
+    suspend fun addFoodRecord(date: String, foodId: String, grams: Double)
+    suspend fun deleteFoodRecord(id: String)
+    fun getDailyPlan(date: String): Flow<DailyPlanEntity?>
+    suspend fun saveDailyPlan(date: String, targetBurnKcal: Int, isConfirmed: Boolean)
+    fun getAllocations(date: String): Flow<List<ExerciseAllocation>>
+    suspend fun saveAllocations(date: String, allocations: List<ExerciseAllocation>)
+    suspend fun updateAllocation(date: String, allocation: ExerciseAllocation)
+    fun getUserProfile(): Flow<UserProfile>
+    suspend fun saveUserProfile(profile: UserProfile)
+}
+
+class FitRepository(
+    private val db: FitDatabase,
+    private val context: Context? = null
+) : IFitRepository {
 
     private val foodDao = db.foodDao()
     private val recordDao = db.foodRecordDao()
@@ -26,14 +47,18 @@ class FitRepository(private val db: FitDatabase) {
     private val allocationDao = db.exerciseAllocationDao()
     private val profileDao = db.userProfileDao()
 
-    fun searchFoods(query: String): Flow<List<FoodItem>> {
+    private fun notifyWidget() {
+        context?.let { FitWidgetProvider.notifyWidgetsUpdate(it) }
+    }
+
+    override fun searchFoods(query: String): Flow<List<FoodItem>> {
         val flow = if (query.isBlank()) foodDao.getAllFoods() else foodDao.searchFoods(query.trim())
         return flow.map { entities ->
             entities.map { it.toDomain() }
         }
     }
 
-    suspend fun addCustomFood(food: FoodItem) {
+    override suspend fun addCustomFood(food: FoodItem) {
         foodDao.insertFood(
             FoodEntity(
                 id = food.id.ifBlank { "custom_" + UUID.randomUUID().toString() },
@@ -49,7 +74,33 @@ class FitRepository(private val db: FitDatabase) {
         )
     }
 
-    fun getFoodRecords(date: String): Flow<List<FoodLogEntry>> {
+    override suspend fun addQuickFoodRecord(
+        date: String,
+        name: String,
+        calories: Int,
+        carbs: Double,
+        protein: Double,
+        fat: Double
+    ): FoodItem {
+        val foodId = "quick_" + UUID.randomUUID().toString().take(8)
+        val cleanName = name.trim().ifBlank { "快捷摄入" }
+        val foodItem = FoodItem(
+            id = foodId,
+            name = cleanName,
+            pinyin = "kuaijie",
+            caloriesPer100g = calories.toDouble(),
+            protein = protein,
+            carbs = carbs,
+            fat = fat,
+            category = "快捷速记",
+            isCustom = true
+        )
+        addCustomFood(foodItem)
+        addFoodRecord(date, foodId, 100.0)
+        return foodItem
+    }
+
+    override fun getFoodRecords(date: String): Flow<List<FoodLogEntry>> {
         return combine(recordDao.getRecordsByDate(date), foodDao.getAllFoods()) { records, foods ->
             val foodMap = foods.associateBy { it.id }
             records.mapNotNull { record ->
@@ -64,7 +115,7 @@ class FitRepository(private val db: FitDatabase) {
         }
     }
 
-    suspend fun addFoodRecord(date: String, foodId: String, grams: Double) {
+    override suspend fun addFoodRecord(date: String, foodId: String, grams: Double) {
         val record = FoodRecordEntity(
             id = UUID.randomUUID().toString(),
             date = date,
@@ -72,15 +123,17 @@ class FitRepository(private val db: FitDatabase) {
             grams = grams
         )
         recordDao.insertRecord(record)
+        notifyWidget()
     }
 
-    suspend fun deleteFoodRecord(id: String) {
+    override suspend fun deleteFoodRecord(id: String) {
         recordDao.deleteRecord(id)
+        notifyWidget()
     }
 
-    fun getDailyPlan(date: String): Flow<DailyPlanEntity?> = planDao.getPlanByDate(date)
+    override fun getDailyPlan(date: String): Flow<DailyPlanEntity?> = planDao.getPlanByDate(date)
 
-    suspend fun saveDailyPlan(date: String, targetBurnKcal: Int, isConfirmed: Boolean) {
+    override suspend fun saveDailyPlan(date: String, targetBurnKcal: Int, isConfirmed: Boolean) {
         planDao.insertOrUpdatePlan(
             DailyPlanEntity(
                 date = date,
@@ -88,9 +141,10 @@ class FitRepository(private val db: FitDatabase) {
                 isConfirmed = isConfirmed
             )
         )
+        notifyWidget()
     }
 
-    fun getAllocations(date: String): Flow<List<ExerciseAllocation>> {
+    override fun getAllocations(date: String): Flow<List<ExerciseAllocation>> {
         return allocationDao.getAllocationsByDate(date).map { entities ->
             val catalogMap = DefaultCatalogs.exercises.associateBy { it.id }
             entities.mapNotNull { entity ->
@@ -106,7 +160,7 @@ class FitRepository(private val db: FitDatabase) {
         }
     }
 
-    suspend fun saveAllocations(date: String, allocations: List<ExerciseAllocation>) {
+    override suspend fun saveAllocations(date: String, allocations: List<ExerciseAllocation>) {
         val entities = allocations.map { alloc ->
             ExerciseAllocationEntity(
                 id = "${date}_${alloc.exercise.id}",
@@ -118,10 +172,11 @@ class FitRepository(private val db: FitDatabase) {
                 isCompleted = alloc.isCompleted
             )
         }
-        allocationDao.insertAllocations(entities)
+        allocationDao.replaceAllocationsForDate(date, entities)
+        notifyWidget()
     }
 
-    suspend fun updateAllocation(date: String, allocation: ExerciseAllocation) {
+    override suspend fun updateAllocation(date: String, allocation: ExerciseAllocation) {
         allocationDao.updateAllocation(
             ExerciseAllocationEntity(
                 id = "${date}_${allocation.exercise.id}",
@@ -133,9 +188,10 @@ class FitRepository(private val db: FitDatabase) {
                 isCompleted = allocation.isCompleted
             )
         )
+        notifyWidget()
     }
 
-    fun getUserProfile(): Flow<UserProfile> {
+    override fun getUserProfile(): Flow<UserProfile> {
         return profileDao.getUserProfile().map { entity ->
             if (entity == null) {
                 UserProfile()
@@ -152,7 +208,7 @@ class FitRepository(private val db: FitDatabase) {
         }
     }
 
-    suspend fun saveUserProfile(profile: UserProfile) {
+    override suspend fun saveUserProfile(profile: UserProfile) {
         profileDao.insertOrUpdateProfile(
             UserProfileEntity(
                 id = 1,
@@ -164,6 +220,7 @@ class FitRepository(private val db: FitDatabase) {
                 targetDeficitKcal = profile.targetDeficitKcal
             )
         )
+        notifyWidget()
     }
 
     private fun FoodEntity.toDomain() = FoodItem(
@@ -174,6 +231,7 @@ class FitRepository(private val db: FitDatabase) {
         protein = protein,
         carbs = carbs,
         fat = fat,
+        category = DefaultCatalogs.foodCategoryMap[id] ?: "主食谷物",
         isCustom = isCustom,
         isArchived = isArchived
     )

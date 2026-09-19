@@ -50,7 +50,8 @@ class CalorieConservationEngine {
         allocations: List<ExerciseAllocation>,
         targetTotalKcal: Int,
         modifiedExerciseId: String,
-        requestedCalories: Int
+        requestedCalories: Int,
+        allowOverflow: Boolean = false
     ): List<ExerciseAllocation> {
         val targetIndex = allocations.indexOfFirst { it.exercise.id == modifiedExerciseId }
         if (targetIndex == -1) return allocations
@@ -71,9 +72,9 @@ class CalorieConservationEngine {
         val availableForModifiedAndOthers = max(0, targetTotalKcal - fixedCalories)
 
         if (adjustableOthers.isEmpty()) {
-            // No other item can adjust: clamp modified item directly to all available
-            val clampedKcal = availableForModifiedAndOthers
-            val quantizedUnits = quantizeUnits(targetItem.exercise, clampedKcal)
+            // No other item can adjust: clamp modified item directly unless overflow allowed
+            val targetKcal = if (allowOverflow) max(0, requestedCalories) else requestedCalories.coerceIn(0, availableForModifiedAndOthers)
+            val quantizedUnits = quantizeUnits(targetItem.exercise, targetKcal)
             val finalKcal = (quantizedUnits * targetItem.exercise.kcalPerUnit).roundToInt()
             return allocations.map {
                 if (it.exercise.id == modifiedExerciseId) it.copy(units = quantizedUnits, calories = finalKcal)
@@ -81,9 +82,14 @@ class CalorieConservationEngine {
             }
         }
 
-        // Clamp modified item
-        val clampedModifiedKcal = requestedCalories.coerceIn(0, availableForModifiedAndOthers)
-        val remainingForOthers = availableForModifiedAndOthers - clampedModifiedKcal
+        // When adjustable others exist
+        val isOverflow = allowOverflow && (requestedCalories > availableForModifiedAndOthers)
+        val clampedModifiedKcal = if (isOverflow) {
+            max(0, requestedCalories)
+        } else {
+            requestedCalories.coerceIn(0, availableForModifiedAndOthers)
+        }
+        val remainingForOthers = if (isOverflow) 0 else availableForModifiedAndOthers - clampedModifiedKcal
 
         // Distribute remaining among adjustable others
         val result = allocations.toMutableList()
@@ -135,7 +141,49 @@ class CalorieConservationEngine {
         }
 
         // Final slack absorption across uncompleted & unlocked items
-        absorbQuantizationResidual(result, targetTotalKcal)
+        if (!isOverflow) {
+            absorbQuantizationResidual(result, targetTotalKcal, excludeExerciseId = modifiedExerciseId)
+        }
+
+        return result
+    }
+
+    /**
+     * Rebalance allocations when the global target calories change (e.g. after profile update or food added).
+     * Guardrail:
+     * - Completed exercises and locked exercises are strictly preserved (immutable).
+     * - Remaining uncompleted, unlocked exercises absorb the difference.
+     * - Residual quantization is absorbed by the designated slack absorber.
+     */
+    fun rebalanceForNewTarget(
+        allocations: List<ExerciseAllocation>,
+        newTargetTotalKcal: Int
+    ): List<ExerciseAllocation> {
+        if (allocations.isEmpty()) return allocations
+
+        val fixedCalories = allocations.filter { it.isCompleted || it.isLocked }.sumOf { it.calories }
+        val remainingTarget = max(0, newTargetTotalKcal - fixedCalories)
+        val adjustable = allocations.filter { !it.isCompleted && !it.isLocked }
+
+        if (adjustable.isEmpty()) {
+            return allocations
+        }
+
+        val newlyAllocated = allocateInitial(adjustable.map { it.exercise }, remainingTarget)
+        val newlyAllocatedMap = newlyAllocated.associateBy { it.exercise.id }
+
+        val result = allocations.map { alloc ->
+            if (alloc.isCompleted || alloc.isLocked) {
+                alloc
+            } else {
+                newlyAllocatedMap[alloc.exercise.id]?.copy(
+                    isCompleted = false,
+                    isLocked = false
+                ) ?: alloc
+            }
+        }.toMutableList()
+
+        absorbQuantizationResidual(result, newTargetTotalKcal)
 
         return result
     }
@@ -149,16 +197,35 @@ class CalorieConservationEngine {
 
     private fun absorbQuantizationResidual(
         allocations: MutableList<ExerciseAllocation>,
-        targetTotalKcal: Int
+        targetTotalKcal: Int,
+        excludeExerciseId: String? = null
     ) {
         val currentSum = allocations.sumOf { it.calories }
         val residual = targetTotalKcal - currentSum
         if (abs(residual) <= 1) return
 
-        // Find candidate absorber: smallest step quantum kcal, unlocked and uncompleted
-        val absorber = allocations
-            .filter { !it.isLocked && !it.isCompleted }
-            .minByOrNull { it.exercise.stepQuantum * it.exercise.kcalPerUnit }
+        // 1. Try candidates other than excludeExerciseId first to preserve modified item's exact units
+        if (excludeExerciseId != null) {
+            val otherCandidates = allocations.filter {
+                !it.isLocked && !it.isCompleted && it.exercise.id != excludeExerciseId
+            }
+            val bestOther = otherCandidates.minByOrNull { it.exercise.stepQuantum * it.exercise.kcalPerUnit }
+            if (bestOther != null) {
+                val targetKcal = max(0, bestOther.calories + residual)
+                val newUnits = quantizeUnits(bestOther.exercise, targetKcal)
+                val newKcal = (newUnits * bestOther.exercise.kcalPerUnit).roundToInt()
+                val residualAfterOther = abs(targetTotalKcal - (currentSum - bestOther.calories + newKcal))
+                if (residualAfterOther <= 1) {
+                    val idx = allocations.indexOfFirst { it.exercise.id == bestOther.exercise.id }
+                    allocations[idx] = bestOther.copy(units = newUnits, calories = newKcal)
+                    return
+                }
+            }
+        }
+
+        // 2. Fallback to all unlocked and uncompleted candidates to guarantee strict conservation <= 1 kcal
+        val allCandidates = allocations.filter { !it.isLocked && !it.isCompleted }
+        val absorber = allCandidates.minByOrNull { it.exercise.stepQuantum * it.exercise.kcalPerUnit }
             ?: return
 
         val absorberIndex = allocations.indexOfFirst { it.exercise.id == absorber.exercise.id }

@@ -4,6 +4,8 @@
     <!-- Strictly Local Offline: Zero android.permission.INTERNET -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:name=".FitApplication"
         android:allowBackup="true"
@@ -21,6 +23,54 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 桌面小部件 4×2 (紧凑型) -->
+        <receiver
+            android:name=".widget.FitWidget4x2Provider"
+            android:exported="true"
+            android:label="@string/widget_4x2_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_fit_4x2_info" />
+        </receiver>
+
+        <!-- 桌面小部件 4×3 (扩展型) -->
+        <receiver
+            android:name=".widget.FitWidget4x3Provider"
+            android:exported="true"
+            android:label="@string/widget_4x3_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_fit_4x3_info" />
+        </receiver>
+
+        <!-- 桌面运动打卡点击动作接收器 -->
+        <receiver
+            android:name=".widget.FitWidgetActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.fit.tracker.widget.ACTION_TOGGLE_EXERCISE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 00:00 每日跨日与系统日期变动刷新接收器 -->
+        <receiver
+            android:name=".widget.FitWidgetRefreshReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.fit.tracker.widget.ACTION_MIDNIGHT_REFRESH" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

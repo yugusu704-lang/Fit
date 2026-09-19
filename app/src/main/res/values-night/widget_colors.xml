@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Mode (Material 3 Expressive Green per Fit Color.kt) -->
+    <color name="widget_card_bg">#141815</color>
+    <color name="widget_card_inner_bg">#1D201D</color>
+    <color name="widget_card_stroke">#272B28</color>
+
+    <color name="widget_primary">#96D5A1</color>
+    <color name="widget_on_primary">#003916</color>
+    <color name="widget_primary_container">#125127</color>
+
+    <color name="widget_text_primary">#DFE4DF</color>
+    <color name="widget_text_secondary">#B8CCBA</color>
+    <color name="widget_text_tertiary">#88938A</color>
+
+    <color name="widget_progress_track">#3A4B3C</color>
+    <color name="widget_progress_fill">#96D5A1</color>
+
+    <color name="widget_checkbox_border">#88938A</color>
+    <color name="widget_checkbox_checked">#96D5A1</color>
+
+    <color name="widget_badge_bg">#125127</color>
+    <color name="widget_badge_text">#B2F2BC</color>
+</resources>
